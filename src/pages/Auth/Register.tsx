@@ -21,8 +21,7 @@ interface RegistrationErrors {
   confirmPassword?: string;
   licenseNumber?: string;
   specialization?: string;
-  hospital?: string;
-  credentials?: string;
+  pinCode?: string;
 }
 
 const Register = () => {
@@ -45,36 +44,70 @@ const Register = () => {
     return emailRegex.test(email);
   };
 
-  // Phone number validation (international format)
+  // Phone number validation (Lebanese format)
   const validatePhone = (phone: string) => {
-    const phoneRegex = /^\+?[1-9]\d{1,14}$/;
-    return phoneRegex.test(phone);
+    // Remove all non-digit characters for validation
+    const cleanPhone = phone.replace(/\D/g, '');
+    
+    // Check if it's a valid Lebanese number
+    // Should start with 961 or 03,71,70,76,78,79,81,01,04,05,06,07,08,09 etc
+    const lebaneseRegex = /^(961[1-9]\d{6}|[0-9][1-9]\d{6})$/;
+    return lebaneseRegex.test(cleanPhone);
   };
 
-  // Name validation (2-50 characters, letters, spaces, and hyphens only)
+  // Format phone number as user types
+  const formatPhoneNumber = (value: string) => {
+    // Remove all non-digit characters
+    const cleanNumber = value.replace(/\D/g, '');
+    
+    // Format based on number length
+    if (cleanNumber.startsWith('961')) {
+      // International format
+      if (cleanNumber.length > 11) return cleanNumber.slice(0, 11);
+      return cleanNumber.replace(/(\d{3})(\d{1})(\d{3})(\d{3})/, '$1 $2 $3 $4');
+    } else {
+      // Local format
+      if (cleanNumber.length > 8) return cleanNumber.slice(0, 8);
+      return cleanNumber.replace(/(\d{2})(\d{3})(\d{3})/, '$1 $2 $3');
+    }
+  };
+
+  // Name validation (2-50 characters, more inclusive format)
   const validateName = (name: string) => {
-    const nameRegex = /^[a-zA-Z\s-]{2,50}$/;
+    const nameRegex = /^[a-zA-ZÀ-ÿ\s.'-]{2,50}$/;
     return nameRegex.test(name);
   };
 
-  const validatePassword = (password: string) => {
-    // Check password strength using zxcvbn
-    const result = zxcvbn(password);
-    setPasswordStrength(result.score);
+  const getPasswordStrengthColor = (score: number) => {
+    switch (score) {
+      case 0: return "bg-gray-200 dark:bg-gray-700";
+      case 1: return "bg-red-500";
+      case 2: return "bg-orange-500";
+      case 3: return "bg-yellow-500";
+      case 4: return "bg-green-500";
+      default: return "bg-gray-200 dark:bg-gray-700";
+    }
+  };
 
-    const validations = {
-      length: password.length >= 8,
-      uppercase: /[A-Z]/.test(password),
-      lowercase: /[a-z]/.test(password),
-      number: /[0-9]/.test(password),
-      special: /[!@#$%^&*(),.?":{}|<>]/.test(password),
-    };
-
+  const getPasswordRequirements = (password: string) => {
     return {
-      isValid: Object.values(validations).every(Boolean),
-      score: result.score,
-      feedback: result.feedback,
+      minLength: password.length >= 8,
+      hasUppercase: /[A-Z]/.test(password),
+      hasLowercase: /[a-z]/.test(password),
+      hasNumber: /[0-9]/.test(password),
+      hasSpecial: /[!@#$%^&*(),.?":{}|<>]/.test(password),
     };
+  };
+
+  const getPasswordFeedback = (score: number) => {
+    switch (score) {
+      case 0: return "Very Weak";
+      case 1: return "Weak";
+      case 2: return "Fair";
+      case 3: return "Good";
+      case 4: return "Strong";
+      default: return "Very Weak";
+    }
   };
 
   const validateForm = () => {
@@ -87,18 +120,20 @@ const Register = () => {
     }
 
     if (!validateName(name)) {
-      newErrors.name = "Name should be 2-50 characters long and contain only letters, spaces, and hyphens";
+      newErrors.name = "Name should be 2-50 characters long";
       isValid = false;
     }
 
     if (!validatePhone(phone)) {
-      newErrors.phone = "Please enter a valid international phone number";
+      newErrors.phone = "Please enter a valid Lebanese phone number";
       isValid = false;
     }
 
-    const passwordValidation = validatePassword(password);
-    if (!passwordValidation.isValid) {
-      newErrors.password = passwordValidation.feedback.warning || "Password does not meet security requirements";
+    // Password validation
+    const requirements = getPasswordRequirements(password);
+    const allRequirementsMet = Object.values(requirements).every(Boolean);
+    if (!allRequirementsMet) {
+      newErrors.password = "Password does not meet all requirements";
       isValid = false;
     }
 
@@ -206,56 +241,43 @@ const Register = () => {
     phone: '',
     license_number: '',
     specialization: '',
-    hospital: '',
+    pin_code: '',
   });
+
+  const [doctorConfirmPassword, setDoctorConfirmPassword] = useState('');
 
   const validateDoctorForm = (): boolean => {
     const newErrors: RegistrationErrors = {};
     
-    // Name validation
-    if (!doctorData.full_name.trim()) {
-      newErrors.name = 'Full name is required';
-    } else if (!validateName(doctorData.full_name)) {
-      newErrors.name = 'Invalid name format';
+    if (!validateName(doctorData.full_name)) {
+      newErrors.name = "Invalid name format";
     }
 
-    // Email validation
-    if (!doctorData.email) {
-      newErrors.email = 'Email is required';
-    } else if (!validateEmail(doctorData.email)) {
-      newErrors.email = 'Invalid email format';
+    if (!validateEmail(doctorData.email)) {
+      newErrors.email = "Invalid email format";
     }
 
-    // Phone validation
-    if (!doctorData.phone) {
-      newErrors.phone = 'Phone number is required';
-    } else if (!validatePhone(doctorData.phone)) {
-      newErrors.phone = 'Invalid phone number format';
+    if (!validatePhone(doctorData.phone)) {
+      newErrors.phone = "Please enter a valid Lebanese phone number";
     }
 
     // Password validation
-    if (!doctorData.password) {
-      newErrors.password = 'Password is required';
-    } else {
-      const passwordValidation = validatePassword(doctorData.password);
-      if (!passwordValidation.isValid) {
-        newErrors.password = passwordValidation.feedback.warning || 'Password is not strong enough';
-      }
+    const requirements = getPasswordRequirements(doctorData.password);
+    const allRequirementsMet = Object.values(requirements).every(Boolean);
+    if (!allRequirementsMet) {
+      newErrors.password = "Password does not meet all requirements";
     }
 
-    // License number validation
+    if (doctorData.password !== doctorConfirmPassword) {
+      newErrors.confirmPassword = "Passwords do not match";
+    }
+
     if (!doctorData.license_number.trim()) {
-      newErrors.licenseNumber = 'Medical license number is required';
+      newErrors.licenseNumber = "Medical license number is required";
     }
 
-    // Specialization validation
     if (!doctorData.specialization) {
-      newErrors.specialization = 'Specialization is required';
-    }
-
-    // Hospital validation
-    if (!doctorData.hospital.trim()) {
-      newErrors.hospital = 'Hospital/Clinic name is required';
+      newErrors.specialization = "Specialization is required";
     }
 
     setErrors(newErrors);
@@ -272,43 +294,36 @@ const Register = () => {
     try {
       setIsLoadingDoctor(true);
 
-      // Validate required fields
-      if (!doctorData.email || !doctorData.password || !doctorData.full_name || 
-          !doctorData.phone || !doctorData.license_number || 
-          !doctorData.specialization || !doctorData.hospital) {
-        throw new Error('Please fill in all required fields');
-      }
-
       // Create a clean copy of the data
       const registrationData = {
-        ...doctorData,
         email: doctorData.email.trim(),
+        password: doctorData.password,
         full_name: doctorData.full_name.trim(),
         phone: doctorData.phone.trim(),
         license_number: doctorData.license_number.trim(),
         specialization: doctorData.specialization.trim(),
-        hospital: doctorData.hospital.trim(),
+        pin_code: doctorData.pin_code.trim()
       };
 
       const response = await authService.registerDoctor(registrationData);
       
-      if (!response || !response.token || !response.user) {
+      if (response && response.token && response.user) {
+        // Store authentication data
+        localStorage.setItem('token', response.token);
+        localStorage.setItem('user', JSON.stringify(response.user));
+        
+        toast({
+          title: "Registration Successful",
+          description: "Your account has been created successfully.",
+        });
+
+        // Navigate to dashboard
+        navigate('/doctor-dashboard');
+      } else {
         throw new Error('Invalid response from server');
       }
-
-      // Store authentication data
-      localStorage.setItem('token', response.token);
-      localStorage.setItem('user', JSON.stringify(response.user));
-      
-      toast({
-        title: "Registration Successful",
-        description: "Please check your email to verify your account.",
-      });
-
-      // Navigate to dashboard
-      navigate('/doctor-dashboard');
     } catch (error) {
-      let errorMessage = 'An error occurred during registration';
+      let errorMessage = 'Registration failed. Please try again.';
       
       if (error instanceof Error) {
         errorMessage = error.message;
@@ -377,18 +392,25 @@ const Register = () => {
 
               <div className="space-y-2">
                 <Label htmlFor="phone">Phone Number</Label>
-                <Input
-                  id="phone"
-                  type="tel"
-                  placeholder="+1234567890"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  required
-                  className={errors.phone ? "border-red-500" : ""}
-                />
+                <div className="relative">
+                  <Input
+                    id="phone"
+                    type="tel"
+                    placeholder="03 123 456 or +961 3 123 456"
+                    value={phone}
+                    onChange={(e) => {
+                      const formattedNumber = formatPhoneNumber(e.target.value);
+                      setPhone(formattedNumber);
+                    }}
+                    className={`${errors.phone ? "border-red-500" : ""} font-mono`}
+                  />
+                </div>
                 {errors.phone && (
                   <p className="text-sm text-red-500">{errors.phone}</p>
                 )}
+                <p className="text-sm text-gray-500">
+                  Enter a valid Lebanese phone number (e.g., 03 123 456 or +961 3 123 456)
+                </p>
               </div>
 
               <div className="space-y-2">
@@ -398,8 +420,11 @@ const Register = () => {
                     id="password"
                     type={showPassword ? "text" : "password"}
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      const result = zxcvbn(e.target.value);
+                      setPasswordStrength(result.score);
+                    }}
                     className={errors.password ? "border-red-500 pr-10" : "pr-10"}
                   />
                   <button
@@ -410,23 +435,54 @@ const Register = () => {
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
-                <div className="flex gap-1 mt-1">
-                  {[0, 1, 2, 3, 4].map((score) => (
-                    <div
-                      key={score}
-                      className={`h-2 w-full rounded ${
-                        score <= passwordStrength
-                          ? [
-                              "bg-red-500",
-                              "bg-orange-500",
-                              "bg-yellow-500",
-                              "bg-green-500",
-                              "bg-green-600",
-                            ][passwordStrength]
-                          : "bg-gray-200"
-                      }`}
-                    />
-                  ))}
+                <div className="space-y-2">
+                  <div className="flex gap-1">
+                    {[0, 1, 2, 3, 4].map((score) => (
+                      <div
+                        key={score}
+                        className={`h-2 w-full rounded-full transition-all duration-300 ${
+                          score <= passwordStrength
+                            ? getPasswordStrengthColor(passwordStrength)
+                            : "bg-gray-200 dark:bg-gray-700"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <div className="text-sm">
+                    <span className={`font-medium ${
+                      passwordStrength <= 1 ? "text-red-500" :
+                      passwordStrength === 2 ? "text-orange-500" :
+                      passwordStrength === 3 ? "text-yellow-500" :
+                      passwordStrength === 4 ? "text-green-500" :
+                      "text-gray-500"
+                    }`}>
+                      Password Strength: {getPasswordFeedback(passwordStrength)}
+                    </span>
+                  </div>
+                  {password && (
+                    <div className="space-y-1 text-sm">
+                      <p className="text-gray-500">Password requirements:</p>
+                      <ul className="space-y-1 text-sm">
+                        {Object.entries(getPasswordRequirements(password)).map(([requirement, isMet]) => (
+                          <li
+                            key={requirement}
+                            className={`flex items-center space-x-2 ${
+                              isMet ? "text-green-500" : "text-gray-500"
+                            }`}
+                          >
+                            <CheckCircle size={14} className={isMet ? "opacity-100" : "opacity-40"} />
+                            <span>
+                              {requirement === "minLength" && "At least 8 characters"}
+                              {requirement === "hasUppercase" && "At least one uppercase letter"}
+                              {requirement === "hasLowercase" && "At least one lowercase letter"}
+                              {requirement === "hasNumber" && "At least one number"}
+                              {requirement === "hasSpecial" && "At least one special character"}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
                 {errors.password && (
                   <p className="text-sm text-red-500">{errors.password}</p>
@@ -523,15 +579,25 @@ const Register = () => {
 
               <div className="space-y-2">
                 <Label htmlFor="phone">Phone Number</Label>
-                <Input
-                  id="phone"
-                  type="tel"
-                  placeholder="+1234567890"
-                  value={doctorData.phone}
-                  onChange={(e) => setDoctorData({ ...doctorData, phone: e.target.value })}
-                  className={errors.phone ? "border-red-500" : ""}
-                />
-                {errors.phone && <p className="text-sm text-red-500">{errors.phone}</p>}
+                <div className="relative">
+                  <Input
+                    id="phone"
+                    type="tel"
+                    placeholder="03 123 456 or +961 3 123 456"
+                    value={doctorData.phone}
+                    onChange={(e) => {
+                      const formattedNumber = formatPhoneNumber(e.target.value);
+                      setDoctorData({ ...doctorData, phone: formattedNumber });
+                    }}
+                    className={`${errors.phone ? "border-red-500" : ""} font-mono`}
+                  />
+                </div>
+                {errors.phone && (
+                  <p className="text-sm text-red-500">{errors.phone}</p>
+                )}
+                <p className="text-sm text-gray-500">
+                  Enter a valid Lebanese phone number (e.g., 03 123 456 or +961 3 123 456)
+                </p>
               </div>
 
               <div className="space-y-2">
@@ -547,38 +613,107 @@ const Register = () => {
               </div>
 
               <div className="space-y-2">
+                <Label htmlFor="pinCode">Hospital PIN Code</Label>
+                <div className="relative">
+                  <Input
+                    id="pinCode"
+                    type="password"
+                    maxLength={4}
+                    placeholder="Enter 4-digit PIN"
+                    value={doctorData.pin_code}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, '').slice(0, 4);
+                      setDoctorData({ ...doctorData, pin_code: value });
+                    }}
+                    className={`${errors.pinCode ? "border-red-500" : ""} text-center tracking-widest font-mono`}
+                  />
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-sm text-gray-400">
+                    {doctorData.pin_code.length}/4
+                  </div>
+                </div>
+                {errors.pinCode && <p className="text-sm text-red-500">{errors.pinCode}</p>}
+                <p className="text-sm text-gray-500">This PIN is provided by your hospital for verification</p>
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="specialization">Specialization</Label>
                 <Select
                   value={doctorData.specialization}
                   onValueChange={(value) => setDoctorData({ ...doctorData, specialization: value })}
                 >
-                  <SelectTrigger className={errors.specialization ? "border-red-500" : ""}>
-                    <SelectValue placeholder="Select specialization" />
+                  <SelectTrigger 
+                    className={`w-full ${errors.specialization ? "border-red-500" : ""} 
+                      bg-white dark:bg-gray-800 
+                      hover:bg-gray-50 dark:hover:bg-gray-700 
+                      focus:ring-2 focus:ring-blue-500 
+                      transition-colors duration-200`}
+                  >
+                    <SelectValue 
+                      placeholder={
+                        <span className="text-gray-500 dark:text-gray-400">
+                          Select your medical specialization
+                        </span>
+                      } 
+                    />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="general">General Practitioner</SelectItem>
-                    <SelectItem value="cardiology">Cardiologist</SelectItem>
-                    <SelectItem value="dermatology">Dermatologist</SelectItem>
-                    <SelectItem value="pediatrics">Pediatrician</SelectItem>
-                    <SelectItem value="neurology">Neurologist</SelectItem>
-                    <SelectItem value="orthopedics">Orthopedist</SelectItem>
-                    <SelectItem value="psychiatry">Psychiatrist</SelectItem>
-                    <SelectItem value="ophthalmology">Ophthalmologist</SelectItem>
+                  <SelectContent 
+                    position="popper"
+                    className="max-h-[300px] overflow-y-auto bg-white dark:bg-gray-800 border rounded-md shadow-lg z-50"
+                    style={{ width: 'var(--radix-select-trigger-width)' }}
+                  >
+                    <SelectItem 
+                      value="general" 
+                      className="hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer py-2"
+                    >
+                      General Practitioner
+                    </SelectItem>
+                    <SelectItem 
+                      value="cardiology" 
+                      className="hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer py-2"
+                    >
+                      Cardiologist
+                    </SelectItem>
+                    <SelectItem 
+                      value="dermatology" 
+                      className="hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer py-2"
+                    >
+                      Dermatologist
+                    </SelectItem>
+                    <SelectItem 
+                      value="pediatrics" 
+                      className="hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer py-2"
+                    >
+                      Pediatrician
+                    </SelectItem>
+                    <SelectItem 
+                      value="neurology" 
+                      className="hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer py-2"
+                    >
+                      Neurologist
+                    </SelectItem>
+                    <SelectItem 
+                      value="orthopedics" 
+                      className="hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer py-2"
+                    >
+                      Orthopedist
+                    </SelectItem>
+                    <SelectItem 
+                      value="psychiatry" 
+                      className="hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer py-2"
+                    >
+                      Psychiatrist
+                    </SelectItem>
+                    <SelectItem 
+                      value="ophthalmology" 
+                      className="hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer py-2"
+                    >
+                      Ophthalmologist
+                    </SelectItem>
                   </SelectContent>
                 </Select>
-                {errors.specialization && <p className="text-sm text-red-500">{errors.specialization}</p>}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="hospital">Hospital/Clinic</Label>
-                <Input
-                  id="hospital"
-                  placeholder="Medical Center Name"
-                  value={doctorData.hospital}
-                  onChange={(e) => setDoctorData({ ...doctorData, hospital: e.target.value })}
-                  className={errors.hospital ? "border-red-500" : ""}
-                />
-                {errors.hospital && <p className="text-sm text-red-500">{errors.hospital}</p>}
+                {errors.specialization && (
+                  <p className="text-sm text-red-500 mt-1">{errors.specialization}</p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -589,7 +724,11 @@ const Register = () => {
                     type={showPassword ? "text" : "password"}
                     placeholder="••••••••"
                     value={doctorData.password}
-                    onChange={(e) => setDoctorData({ ...doctorData, password: e.target.value })}
+                    onChange={(e) => {
+                      setDoctorData({ ...doctorData, password: e.target.value });
+                      const result = zxcvbn(e.target.value);
+                      setPasswordStrength(result.score);
+                    }}
                     className={errors.password ? "border-red-500" : ""}
                   />
                   <button
@@ -600,51 +739,71 @@ const Register = () => {
                     {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                   </button>
                 </div>
-                {errors.password && <p className="text-sm text-red-500">{errors.password}</p>}
-                {passwordStrength > 0 && (
-                  <div className="mt-2">
-                    <div className="flex gap-1">
-                      {[1, 2, 3, 4].map((score) => (
-                        <div
-                          key={score}
-                          className={`h-2 w-1/4 rounded ${
-                            score <= passwordStrength
-                              ? score <= 2
-                                ? "bg-red-500"
-                                : score === 3
-                                ? "bg-yellow-500"
-                                : "bg-green-500"
-                              : "bg-gray-200"
-                          }`}
-                        />
-                      ))}
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Password strength:{" "}
-                      {passwordStrength <= 2
-                        ? "Weak"
-                        : passwordStrength === 3
-                        ? "Good"
-                        : "Strong"}
-                    </p>
+                <div className="space-y-2">
+                  <div className="flex gap-1">
+                    {[0, 1, 2, 3, 4].map((score) => (
+                      <div
+                        key={score}
+                        className={`h-2 w-full rounded-full transition-all duration-300 ${
+                          score <= passwordStrength
+                            ? getPasswordStrengthColor(passwordStrength)
+                            : "bg-gray-200 dark:bg-gray-700"
+                        }`}
+                      />
+                    ))}
                   </div>
+                  <div className="text-sm">
+                    <span className={`font-medium ${
+                      passwordStrength <= 1 ? "text-red-500" :
+                      passwordStrength === 2 ? "text-orange-500" :
+                      passwordStrength === 3 ? "text-yellow-500" :
+                      passwordStrength === 4 ? "text-green-500" :
+                      "text-gray-500"
+                    }`}>
+                      Password Strength: {getPasswordFeedback(passwordStrength)}
+                    </span>
+                  </div>
+                  {doctorData.password && (
+                    <div className="space-y-1 text-sm">
+                      <p className="text-gray-500">Password requirements:</p>
+                      <ul className="space-y-1 text-sm">
+                        {Object.entries(getPasswordRequirements(doctorData.password)).map(([requirement, isMet]) => (
+                          <li
+                            key={requirement}
+                            className={`flex items-center space-x-2 ${
+                              isMet ? "text-green-500" : "text-gray-500"
+                            }`}
+                          >
+                            <CheckCircle size={14} className={isMet ? "opacity-100" : "opacity-40"} />
+                            <span>
+                              {requirement === "minLength" && "At least 8 characters"}
+                              {requirement === "hasUppercase" && "At least one uppercase letter"}
+                              {requirement === "hasLowercase" && "At least one lowercase letter"}
+                              {requirement === "hasNumber" && "At least one number"}
+                              {requirement === "hasSpecial" && "At least one special character"}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+                {errors.password && (
+                  <p className="text-sm text-red-500">{errors.password}</p>
                 )}
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="credentials">Upload Credentials</Label>
+                <Label htmlFor="confirmPassword">Confirm Password</Label>
                 <Input
-                  id="credentials"
-                  type="file"
-                  accept=".pdf,.doc,.docx"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      setDoctorData({ ...doctorData, credentials: file });
-                    }
-                  }}
+                  id="confirmPassword"
+                  type="password"
+                  placeholder="••••••••"
+                  value={doctorConfirmPassword}
+                  onChange={(e) => setDoctorConfirmPassword(e.target.value)}
+                  className={errors.confirmPassword ? "border-red-500" : ""}
                 />
-                <p className="text-xs text-gray-500">Upload your medical license and certifications (PDF, DOC, DOCX)</p>
+                {errors.confirmPassword && <p className="text-sm text-red-500">{errors.confirmPassword}</p>}
               </div>
 
               <Button type="submit" className="w-full" disabled={isLoadingDoctor}>

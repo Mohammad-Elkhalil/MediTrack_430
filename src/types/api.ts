@@ -24,8 +24,7 @@ export interface DoctorRegisterRequest {
   phone: string;
   license_number: string;
   specialization: string;
-  hospital: string;
-  credentials?: File;
+  pin_code: string;  // 4-digit PIN for hospital verification
 }
 
 export interface Doctor {
@@ -63,6 +62,11 @@ export interface Appointment {
   date: string;
   time: string;
   status: 'scheduled' | 'completed' | 'cancelled';
+  timeSlot: {
+    startTime: string;
+    endTime: string;
+  };
+  reason?: string;
 }
 
 // Error Response type

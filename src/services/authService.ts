@@ -5,50 +5,20 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000
 export const authService = {
   async registerDoctor(data: DoctorRegisterRequest): Promise<AuthResponse> {
     try {
-      // Check if there are any File objects that require FormData
-      const hasFiles = data.credentials instanceof File;
+      const response = await fetch(`${API_BASE_URL}/doctors/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
 
-      if (hasFiles) {
-        // Use FormData for requests with files
-        const formData = new FormData();
-        Object.entries(data).forEach(([key, value]) => {
-          if (value !== undefined) {
-            if (value instanceof File) {
-              formData.append(key, value);
-            } else {
-              formData.append(key, String(value));
-            }
-          }
-        });
-
-        const response = await fetch(`${API_BASE_URL}/doctors/register`, {
-          method: 'POST',
-          body: formData,
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || 'Failed to register doctor');
-        }
-
-        return await response.json();
-      } else {
-        // Use JSON for requests without files
-        const response = await fetch(`${API_BASE_URL}/doctors/register`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(data),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || 'Failed to register doctor');
-        }
-
-        return await response.json();
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to register doctor');
       }
+
+      return await response.json();
     } catch (error) {
       if (error instanceof Error) {
         console.error('Error registering doctor:', error.message);

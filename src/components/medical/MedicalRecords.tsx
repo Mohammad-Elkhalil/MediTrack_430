@@ -1,41 +1,16 @@
 import React, { useState } from 'react';
 import { toast } from 'react-toastify';
 import { FaFileUpload, FaDownload, FaEye, FaLock } from 'react-icons/fa';
+import { MedicalRecord, MedicalRecordType, MedicalRecordError, MedicalRecordState } from '@/types/medical';
+import { withEncryption } from '../security/withEncryption';
 
-interface MedicalRecord {
-  id: string;
-  title: string;
-  date: string;
-  type: string;
-  doctor: string;
-  fileUrl: string;
-  isEncrypted: boolean;
+interface RecordStates {
+  [key: string]: MedicalRecordState;
 }
 
-// Mock data for medical records
-const mockRecords: MedicalRecord[] = [
-  {
-    id: '1',
-    title: 'Blood Test Results',
-    date: '2024-03-10',
-    type: 'Laboratory',
-    doctor: 'Dr. John Smith',
-    fileUrl: '/mock-files/blood-test.pdf',
-    isEncrypted: true,
-  },
-  {
-    id: '2',
-    title: 'X-Ray Report',
-    date: '2024-03-05',
-    type: 'Radiology',
-    doctor: 'Dr. Sarah Johnson',
-    fileUrl: '/mock-files/xray.pdf',
-    isEncrypted: true,
-  },
-];
-
 const MedicalRecords: React.FC = () => {
-  const [records] = useState<MedicalRecord[]>(mockRecords);
+  const [records, setRecords] = useState<MedicalRecord[]>([]);
+  const [recordStates, setRecordStates] = useState<RecordStates>({});
   const [loading, setLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
@@ -69,9 +44,7 @@ const MedicalRecords: React.FC = () => {
 
     try {
       setLoading(true);
-      // TODO: Implement actual file upload with encryption
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
+      await handleUpload(selectedFile, 'Laboratory');
       toast.success('File uploaded and encrypted successfully');
       setSelectedFile(null);
       // Reset file input
@@ -85,128 +58,200 @@ const MedicalRecords: React.FC = () => {
     }
   };
 
-  const handleDownload = async (record: MedicalRecord) => {
+  const handleUpload = async (file: File, type: MedicalRecordType) => {
+    const recordId = crypto.randomUUID();
+    setRecordStates(prev => ({
+      ...prev,
+      [recordId]: { isUploading: true, isDownloading: false, isViewing: false, error: null }
+    }));
+
     try {
-      setLoading(true);
-      // TODO: Implement actual file download with decryption
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      toast.success('File downloaded and decrypted successfully');
+      // Upload logic here
+      const newRecord: MedicalRecord = {
+        id: recordId,
+        title: file.name,
+        date: new Date().toISOString(),
+        type,
+        doctor: 'Dr. Smith', // Replace with actual logged in doctor
+        fileUrl: 'mock-url', // Replace with actual uploaded file URL
+        isEncrypted: true
+      };
+
+      setRecords(prev => [...prev, newRecord]);
     } catch (error) {
-      toast.error('Failed to download file. Please try again.');
-      console.error('Download error:', error);
-    } finally {
-      setLoading(false);
+      const medicalError: MedicalRecordError = {
+        name: 'UploadError',
+        message: 'Failed to upload medical record',
+        code: 'UPLOAD_FAILED',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      };
+      setRecordStates(prev => ({
+        ...prev,
+        [recordId]: { ...prev[recordId], error: medicalError, isUploading: false }
+      }));
+    }
+  };
+
+  const handleDownload = async (record: MedicalRecord) => {
+    setRecordStates(prev => ({
+      ...prev,
+      [record.id]: { ...prev[record.id], isDownloading: true, error: null }
+    }));
+
+    try {
+      // Download logic here
+    } catch (error) {
+      const medicalError: MedicalRecordError = {
+        name: 'DownloadError',
+        message: 'Failed to download medical record',
+        code: 'DOWNLOAD_FAILED',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      };
+      setRecordStates(prev => ({
+        ...prev,
+        [record.id]: { ...prev[record.id], error: medicalError, isDownloading: false }
+      }));
     }
   };
 
   const handleView = async (record: MedicalRecord) => {
+    setRecordStates(prev => ({
+      ...prev,
+      [record.id]: { ...prev[record.id], isViewing: true, error: null }
+    }));
+
     try {
-      setLoading(true);
-      // TODO: Implement secure file viewing
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // In a real application, this would open a secure viewer
-      toast.info('Opening secure document viewer...');
+      // View logic here
     } catch (error) {
-      toast.error('Failed to view file. Please try again.');
-      console.error('View error:', error);
-    } finally {
-      setLoading(false);
+      const medicalError: MedicalRecordError = {
+        name: 'ViewError',
+        message: 'Failed to view medical record',
+        code: 'VIEW_FAILED',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      };
+      setRecordStates(prev => ({
+        ...prev,
+        [record.id]: { ...prev[record.id], error: medicalError, isViewing: false }
+      }));
     }
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-6 bg-white rounded-lg shadow-lg">
-      <h2 className="text-2xl font-bold text-gray-900 mb-6">Medical Records</h2>
-
+    <div className="p-4">
+      <h2 className="text-2xl font-bold mb-4">Medical Records</h2>
+      
       {/* Upload Section */}
-      <form onSubmit={handleUploadSubmit} className="mb-8">
-        <div className="max-w-xl">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Upload New Record
-          </label>
-          <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
-            <div className="space-y-1 text-center">
-              <FaFileUpload className="mx-auto h-12 w-12 text-gray-400" />
-              <div className="flex text-sm text-gray-600">
-                <label
-                  htmlFor="file-upload"
-                  className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500"
-                >
-                  <span>Upload a file</span>
-                  <input
-                    id="file-upload"
-                    name="file-upload"
-                    type="file"
-                    className="sr-only"
-                    onChange={handleFileUpload}
-                    accept=".pdf,.jpg,.jpeg,.png"
-                  />
-                </label>
-                <p className="pl-1">or drag and drop</p>
-              </div>
-              <p className="text-xs text-gray-500">
-                PDF, PNG, JPG up to 10MB
-              </p>
-            </div>
+      <div className="mb-6">
+        <input
+          type="file"
+          onChange={handleFileUpload}
+          className="hidden"
+          id="file-upload"
+          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+        />
+        <label
+          htmlFor="file-upload"
+          className="inline-flex items-center px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 cursor-pointer"
+        >
+          <FaFileUpload className="mr-2" />
+          Select File
+        </label>
+        {selectedFile && (
+          <div className="mt-2">
+            <span className="text-gray-600">{selectedFile.name}</span>
+            <button
+              onClick={handleUploadSubmit}
+              disabled={loading}
+              className="ml-4 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:bg-gray-400"
+            >
+              {loading ? 'Uploading...' : 'Upload'}
+            </button>
           </div>
-          {selectedFile && (
-            <div className="mt-4">
-              <button
-                type="submit"
-                disabled={loading}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-              >
-                {loading ? 'Uploading...' : 'Upload Selected File'}
-              </button>
-            </div>
-          )}
-        </div>
-      </form>
+        )}
+      </div>
 
       {/* Records List */}
       <div className="space-y-4">
-        {records.map(record => (
-          <div
-            key={record.id}
-            className="border rounded-lg p-4 flex items-center justify-between"
-          >
-            <div className="flex-1">
-              <div className="flex items-center mb-2">
-                <FaLock className="text-green-500 mr-2" />
-                <h3 className="font-medium text-gray-900">{record.title}</h3>
-              </div>
-              <div className="text-sm text-gray-500">
-                <p>Date: {record.date}</p>
-                <p>Type: {record.type}</p>
-                <p>Doctor: {record.doctor}</p>
-              </div>
-            </div>
+        {records.map((record) => {
+          const state = recordStates[record.id] || {
+            isUploading: false,
+            isDownloading: false,
+            isViewing: false,
+            error: null
+          };
 
-            <div className="flex space-x-2">
-              <button
-                onClick={() => handleView(record)}
-                disabled={loading}
-                className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                <FaEye className="mr-2" />
-                View
-              </button>
-              <button
-                onClick={() => handleDownload(record)}
-                disabled={loading}
-                className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                <FaDownload className="mr-2" />
-                Download
-              </button>
+          return (
+            <div
+              key={record.id}
+              className="p-4 border rounded-lg shadow-sm hover:shadow-md transition-shadow"
+            >
+              <div className="flex justify-between items-start">
+                <div>
+                  <h3 className="text-lg font-semibold flex items-center">
+                    {record.title}
+                    {record.isEncrypted && (
+                      <FaLock className="ml-2 text-green-500" title="Encrypted" />
+                    )}
+                  </h3>
+                  <p className="text-gray-600 text-sm">
+                    {new Date(record.date).toLocaleDateString()}
+                  </p>
+                  <p className="text-gray-600 text-sm">{record.doctor}</p>
+                  <p className="text-gray-600 text-sm">Type: {record.type}</p>
+                </div>
+                
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => handleDownload(record)}
+                    disabled={state.isDownloading}
+                    className="p-2 text-blue-500 hover:text-blue-600 disabled:text-gray-400"
+                    title="Download"
+                  >
+                    <FaDownload />
+                  </button>
+                  <button
+                    onClick={() => handleView(record)}
+                    disabled={state.isViewing}
+                    className="p-2 text-green-500 hover:text-green-600 disabled:text-gray-400"
+                    title="View"
+                  >
+                    <FaEye />
+                  </button>
+                </div>
+              </div>
+
+              {/* Error Messages */}
+              {state.error && (
+                <div className="mt-2 text-red-500 text-sm">
+                  {state.error.message}
+                  {state.error.details && (
+                    <span className="block text-xs text-red-400">
+                      {state.error.details}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Loading States */}
+              {(state.isUploading || state.isDownloading || state.isViewing) && (
+                <div className="mt-2 text-sm text-blue-500">
+                  {state.isUploading && 'Uploading...'}
+                  {state.isDownloading && 'Downloading...'}
+                  {state.isViewing && 'Opening viewer...'}
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
+
+        {records.length === 0 && (
+          <p className="text-gray-500 text-center py-8">
+            No medical records found. Upload a new record to get started.
+          </p>
+        )}
       </div>
     </div>
   );
 };
 
-export default MedicalRecords; 
+export default withEncryption(MedicalRecords); 

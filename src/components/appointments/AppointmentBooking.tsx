@@ -112,17 +112,10 @@ const AppointmentBooking: React.FC = () => {
             <FaCalendar className="absolute left-3 top-3 text-gray-400 z-10" />
             <DatePicker
               selected={selectedDate}
-              onChange={(date: Date) => setSelectedDate(date)}
+              onChange={(date: Date | null) => date && setSelectedDate(date)}
               minDate={new Date()}
-              filterDate={(date: Date) => {
-                if (!selectedDoctorData) return false;
-                return selectedDoctorData.availableDates.some(
-                  availableDate => availableDate.toDateString() === date.toDateString()
-                );
-              }}
-              className="pl-10 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-              placeholderText="Select available date"
-              required
+              dateFormat="MMMM d, yyyy"
+              className="w-full p-2 border rounded"
             />
           </div>
         </div>
