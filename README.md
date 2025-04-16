@@ -1,4 +1,4 @@
-# HealSync - Healthcare Management System
+# MediTrack - Healthcare Management System
 
 ## Project Overview
 HealSync is a comprehensive healthcare management system built with modern web technologies. It provides a platform for patients and doctors to manage medical records, appointments, and healthcare information securely.
